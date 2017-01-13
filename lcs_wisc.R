@@ -33,12 +33,12 @@ parameters {
 vector[2] beta;  
 real pi;
 real<lower=0> sigma; 
-cov_matrix[2] pphi;
-} 
-transformed parameters {
 cov_matrix[2] phi;
-phi = diag_matrix(rep_vector(1.0,2)); 
 } 
+//transformed parameters {
+//cov_matrix[2] phi;
+//phi = diag_matrix(rep_vector(1.0,2)); 
+//} 
 
 model {
 matrix[N,2] s;
@@ -46,7 +46,7 @@ matrix[N,T] y;
 matrix[N,T-1] d;
 
 for (i in 1:N){
-s[i,1:2] ~ multi_normal_prec(beta, pphi);
+s[i,1:2] ~ multi_normal(beta, phi);
 X[i,1]~ normal(y[i,1],pow(sigma, -0.5));
 y[i,1] = s[i,2];
 
@@ -57,11 +57,11 @@ y[i,t] = d[i,t-1]+y[i,t-1];
 }
 }
 
-sigma ~ gamma(.001,10);
+sigma ~ gamma(1,10);
 pi~normal(0,10);
 beta[1]~normal(-2,10);
 beta[2]~normal(20,10);
-pphi~wishart(2,phi);
+phi~wishart(10,diag_matrix(rep_vector(1.0,2)));
 }
 "
 
