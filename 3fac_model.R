@@ -1,5 +1,11 @@
 library(rstan);library(lavaan)
 
+#install_github('nathanvan/rstanmulticore')
+library(rstanmulticore)
+
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+
 HS =data.frame(scale(HolzingerSwineford1939[,7:15]))
 D <-3
 P =9
@@ -77,7 +83,7 @@ model{
 }
 "
 
-fa.model=stan(model_code=mod.stan,
-                data = fa.data,chains=1,
+fa.model=pstan(model_code=mod.stan,
+                data = fa.data,chains=3,
               pars=c("lam","b","var_p"))
 print(fa.model)
