@@ -4,6 +4,9 @@ names(wisc)<- c("V1","V2","V4","V6","P1","P2","P4", "P6", "Moeducat")
 
 
 library(rstan)
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+library(rstanmulticore)
 
 wisc.verb <- wisc[,c(1:4,9)]
 
@@ -27,13 +30,18 @@ head(wisc.long)
 
 
 library(nlme)
-mix1 <- lme(fixed = verbal ~ grade, random = ~ grade | id, data = wisc.long, method="ML" )
+mix1 <- lme(fixed = verbal ~ 1, random = ~ 1 | id, data = wisc.long, method="ML" )
 summary(mix1) # get same estimates as in LGM, notice SD not VAR
 
+library(nlme)
+mix2 <- lme(fixed = verbal ~ grade, random = ~ grade | id, data = wisc.long, method="ML" )
+summary(mix2) # get same estimates as in LGM, notice SD not VAR
 
 
 
 
+head(wisc.long)
+max(wisc.long[,"id"])
 
 
 
@@ -42,38 +50,44 @@ dat <- list(
   verbal = wisc.long[,"verbal"],
   grade = wisc.long[,"grade"],
   N = nrow(wisc.long),
-  R = diag(2),
-  m = c(0,0))
+  J = max(wisc.long[,"id"]),
+  subj = as.integer(factor(wisc.long$id)))
 
 stanmodel <- "
 data {
   int N; 
-  vector[2] m;
-  matrix[2,2] R;
   real verbal[N]; 
   real grade[N];
+  int<lower=1> J; //number of subjects
+  int<lower=1, upper=J> subj[N]; //subject id
 } 
 parameters {
   vector[2] beta;
   real<lower=0> sigma;
-  corr_matrix[2] psi;
+  vector<lower=0>[2] sigma_u;
+  cholesky_factor_corr[2] L_u;
+  matrix[2,J] z_u;
+}
+transformed parameters {
+  matrix[2,J] phi;
+  phi = diag_pre_multiply(sigma_u,L_u) * z_u; //subj random effects
 }
 model{
   real mu;
+  L_u ~ lkj_corr_cholesky(2.0);
+  to_vector(z_u) ~ normal(0,1);
   for (i in 1:N){
-    mu = beta[1] + beta[2]*grade[i];
-    verbal ~ normal(mu,sigma);
+    mu = beta[1] + phi[1,subj[i]] + (beta[2]+phi[2,subj[i]])*grade[i];
+    verbal[i] ~ normal(mu,sigma);
   }
-  beta ~ multi_normal(m,psi);
-  psi ~ lkj_corr(2);
 }
 "
 
 mixed.model=stan(model_code=stanmodel,
                data = dat,chains=1,
-               pars=c("beta","sigma","psi"))
+               pars=c("beta","sigma","L_u","sigma_u"))
 print(mixed.model)
-
+ 
 
 
 
