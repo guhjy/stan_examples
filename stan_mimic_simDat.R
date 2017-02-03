@@ -1,5 +1,9 @@
 library(rstan); library(lavaan)
 
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
+library(rstanmulticore)
+
 xx = list()
 for(i in 1:100){
   xx[i] = paste("x", i, sep = "")
@@ -90,9 +94,9 @@ mu[i,4] = alpha[4] + lam[3]*FS[i];
 mu[i,5] = alpha[5] + lam[4]*FS[i];
 mu[i,6] = alpha[6] + lam[5]*FS[i];
 
-for(j in 1:106){
-  mu2[i] =  mu2[i] + beta[j]*cov[i,j];
-}
+
+  mu2[i] =  beta'*cov[i,]';
+
 
 }
 }
@@ -104,7 +108,7 @@ alpha ~ normal(0,1);
 psi ~ gamma(2,2);
 
 for(i in 1:N){  
-  for(j in 1:9){
+  for(j in 1:6){
     X[i,j] ~ normal(mu[i,j],pow(sigma[j],0.5));
   }
 FS[i] ~ normal(mu2[i],psi);
