@@ -45,7 +45,7 @@ for(k in 1:length(run.list)){
   run.mod = paste(run.mod,run.list[[k]],sep="\n")
 }
 
-dat <- simulateData(pop.mod,sample.nobs=200,fixed.x=TRUE)
+dat <- simulateData(pop.mod,sample.nobs=500,fixed.x=TRUE)
 
 head(dat)
 
@@ -62,15 +62,29 @@ dat <- list(
   N = N,
   X = X,
   cov = cov,
-  npen=106)
+  npen=106,
+  nu = 1)
 
 
 mod.stan <-"
+functions {
+// square root of a vector (elementwise)
+vector sqrt_vec(vector x) {
+vector[dims(x)[1]] res;
+for (m in 1:dims(x)[1]){
+res[m] <- sqrt(x[m]);
+}
+return res;
+}
+}
+
 data{
 int npen; // number penalized parameters
 int N; // sample size
 matrix[N,6] X; // data matrix of order [N,P]
 matrix[N,npen] cov; // data matrix of order [N,P]
+real<lower=1> nu; // degrees of freedom for the half t-priors
+
 }
 
 parameters{
@@ -78,15 +92,31 @@ vector[N] FS; // factor scores, matrix of order [N,D]
 vector<lower=0>[6] sigma;
 vector[5] lam;
 vector[6] alpha;
-vector[npen] beta;
 real<lower=0> psi;
-real pen;
+
+// auxiliary variables for the variance parameters
+vector[npen] z;
+real<lower=0> r1_global;
+real<lower=0> r2_global;
+vector<lower=0>[npen] r1_local;
+vector<lower=0>[npen] r2_local;
+
 }
+
+
 
 transformed parameters{
 
 vector[6] mu[N];
 vector[N] mu2;
+real<lower=0> tau;
+vector<lower=0>[npen] lambda;
+vector[npen] beta;
+
+tau = r1_global * sqrt(r2_global);
+lambda = r1_local .* sqrt_vec(r2_local);
+beta = z .* lambda*tau;
+
 
 
 for(i in 1:N){
@@ -98,7 +128,7 @@ mu[i,5] = alpha[5] + lam[4]*FS[i];
 mu[i,6] = alpha[6] + lam[5]*FS[i];
 
 
-  mu2[i] =  beta'*cov[i,]';
+mu2[i] =  beta'*cov[i,]';
 
 
 }
@@ -108,18 +138,23 @@ model{
 sigma ~ gamma(2,2);
 alpha ~ normal(0,1);
 psi ~ gamma(2,2);
-pen ~ gamma(1,.001);
 
 
-for(j in 1:npen){
-beta[j] ~ normal(0,pow(pen,-.5));
-}
+// https://arxiv.org/pdf/1508.02502.pdf
+// half t-priors for lambdas (nu = 1 corresponds to horseshoe)
+z ~ normal(0, 1);
+r1_local~ normal(0.0, 1.0);
+r2_local ~ inv_gamma(0.5*nu, 0.5*nu);
+// half cauchy for tau
+r1_global ~ normal(0.0, 1.0);
+r2_global ~ inv_gamma(0.5, 0.5);
+
 
 
 for(i in 1:N){  
-  for(j in 1:6){
-    X[i,j] ~ normal(mu[i,j],pow(sigma[j],0.5));
-  }
+for(j in 1:6){
+X[i,j] ~ normal(mu[i,j],pow(sigma[j],0.5));
+}
 FS[i] ~ normal(mu2[i],psi);
 }
 }
@@ -128,6 +163,6 @@ FS[i] ~ normal(mu2[i],psi);
 
 fa.model=stan(model_code=mod.stan,
               data = dat,chains=1,
-              pars=c("sigma","lam","pen","beta","psi","alpha"))
+              pars=c("sigma","lam","beta","psi","alpha"))
 
 print(fa.model)

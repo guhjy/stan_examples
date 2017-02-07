@@ -80,13 +80,23 @@ vector[5] lam;
 vector[6] alpha;
 vector[npen] beta;
 real<lower=0> psi;
-real pen;
+real<lower=0> pinvpsi;
+//real<lower=0> gammaPar;
+//real<lower=0> ptau;
 }
 
 transformed parameters{
 
 vector[6] mu[N];
 vector[N] mu2;
+real ppsi;
+real pen;
+
+
+pen =  pow(ppsi,-1);
+ppsi = pow(pinvpsi,-1);
+
+
 
 
 for(i in 1:N){
@@ -108,13 +118,17 @@ model{
 sigma ~ gamma(2,2);
 alpha ~ normal(0,1);
 psi ~ gamma(2,2);
-pen ~ gamma(1,.001);
 
+pinvpsi ~ gamma(1,.001);
+//ptau ~ gamma(1,gammaPar/2);
+//gammaPar ~ gamma(1,.001);
 
 for(j in 1:npen){
 beta[j] ~ normal(0,pow(pen,-.5));
 }
 
+
+/////
 
 for(i in 1:N){  
   for(j in 1:6){
