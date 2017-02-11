@@ -1,4 +1,5 @@
 library(rstan); library(lavaan)
+library(MCMCvis)
 
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -23,7 +24,8 @@ sim.list[[1]] = "f1 =~ y1 + 0.8*y2 + 1.2*y3 + 0.8*y4 + 0.5*y5 + 1.5*y6
 "
 
 sim.list[[2]] = "
-f1 ~ 1*x1000 + 1*x1001 + 1*x1002 + 1*x1003 + 1*x1004 + 1*x1005
+f1 ~ 1*x1001 + 1*x1002 + 1*x1003 + 1*x1004 + 1*x1005
+f1 ~ .2*x1006 + .2*x1007 + .2*x1008 + .2*x1009 + .2*x1010
 "
 sim.list[[3]] = paste(paste("f1"," ~ "), reg.list)
 
@@ -38,7 +40,7 @@ run.list[[1]] = "f1 =~ y1 + y2 + y3 + y4 + y5 + y6
 "
 run.list[[2]] = paste(paste("f1"," ~ "), reg.list2)
 run.list[[3]] = "
-f1 ~ x1000 + x1001 + x1002 + x1003 + x1004 + x1005
+f1 ~ x1001 + x1002 + x1003 + x1004 + x1005 + x1006 + x1007 + x1008 + x1009 + x1010
 "
 run.mod = " "
 for(k in 1:length(run.list)){
@@ -51,7 +53,7 @@ head(dat)
 
 
 X <- dat[,1:6]
-cov <- dat[,7:112]
+cov <- dat[,7:116]
 
 
 X = as.matrix(X)
@@ -62,7 +64,7 @@ dat <- list(
   N = N,
   X = X,
   cov = cov,
-  npen=106)
+  npen=110)
 
 
 mod.stan <-"
@@ -80,21 +82,22 @@ vector[5] lam;
 vector[6] alpha;
 vector[npen] beta;
 real<lower=0> psi;
-vector[npen] pinvpsi;
-vector[npen] gammaPar;
-vector[npen] ptau;
+real<lower=0> lambda;
+
+vector<lower=0>[npen] tau;
+vector<lower=0>[npen] ptau;
 }
 
 transformed parameters{
 
 vector[6] mu[N];
 vector[N] mu2;
-vector[npen] ppsi;
-vector[npen] pen;
+vector<lower=0>[npen] pen;
+real<lower=0> ppsi;
 
+ppsi = pow(lambda,-1);
 for(j in 1:npen){
-pen[j] =  pow(ppsi[j],-1);
-ppsi[j] = pow(pinvpsi[j],-1);
+  pen[j] = ppsi*ptau[j];
 }
 
 
@@ -119,12 +122,12 @@ sigma ~ gamma(2,2);
 alpha ~ normal(0,1);
 psi ~ gamma(2,2);
 
-pinvpsi ~ gamma(1,.05);
-ptau ~ gamma(1,gammaPar/2);
-gammaPar ~ gamma(1,.05);
+lambda ~ gamma(1,.05);
+tau ~ gamma(1,.1);
+ptau ~ gamma(1,tau/2);
 
 for(j in 1:npen){
-beta[j] ~ normal(0,pow(pen[j],-.5));
+beta[j] ~ normal(0,pen[j]);
 }
 
 
@@ -144,14 +147,15 @@ init.list <- function(){
   list(sigma=rep(1,6),
   psi=1,
   lam=rep(1,5),
-  beta=rep(0,106),
+  beta=rep(0,110),
   alpha = rep(0,6))
 }
 
-
+# https://www.ariddell.org/horseshoe-prior-with-stan.html
 
 fa.model=stan(model_code=mod.stan,
               data = dat,chains=1,init=init.list,
               pars=c("sigma","lam","beta","psi","alpha"))
 
 print(fa.model)
+MCMCplot(fa.model,params="beta")

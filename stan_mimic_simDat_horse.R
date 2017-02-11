@@ -1,4 +1,5 @@
 library(rstan); library(lavaan)
+library(MCMCvis)
 
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -23,7 +24,8 @@ sim.list[[1]] = "f1 =~ y1 + 0.8*y2 + 1.2*y3 + 0.8*y4 + 0.5*y5 + 1.5*y6
 "
 
 sim.list[[2]] = "
-f1 ~ 1*x1000 + 1*x1001 + 1*x1002 + 1*x1003 + 1*x1004 + 1*x1005
+f1 ~ 1*x1001 + 1*x1002 + 1*x1003 + 1*x1004 + 1*x1005
+f1 ~ .2*x1006 + .2*x1007 + .2*x1008 + .2*x1009 + .2*x1010
 "
 sim.list[[3]] = paste(paste("f1"," ~ "), reg.list)
 
@@ -38,20 +40,20 @@ run.list[[1]] = "f1 =~ y1 + y2 + y3 + y4 + y5 + y6
 "
 run.list[[2]] = paste(paste("f1"," ~ "), reg.list2)
 run.list[[3]] = "
-f1 ~ x1000 + x1001 + x1002 + x1003 + x1004 + x1005
+f1 ~ x1001 + x1002 + x1003 + x1004 + x1005 + x1006 + x1007 + x1008 + x1009 + x1010
 "
 run.mod = " "
 for(k in 1:length(run.list)){
   run.mod = paste(run.mod,run.list[[k]],sep="\n")
 }
 
-dat <- simulateData(pop.mod,sample.nobs=500,fixed.x=TRUE)
+dat <- simulateData(pop.mod,sample.nobs=200,fixed.x=TRUE)
 
 head(dat)
 
 
 X <- dat[,1:6]
-cov <- dat[,7:112]
+cov <- dat[,7:116]
 
 
 X = as.matrix(X)
@@ -62,8 +64,8 @@ dat <- list(
   N = N,
   X = X,
   cov = cov,
-  npen=106,
-  nu = 1)
+  npen=110,
+  nu=1)
 
 
 mod.stan <-"
@@ -166,3 +168,4 @@ fa.model=stan(model_code=mod.stan,
               pars=c("sigma","lam","beta","psi","alpha"))
 
 print(fa.model)
+MCMCplot(fa.model,params="beta")

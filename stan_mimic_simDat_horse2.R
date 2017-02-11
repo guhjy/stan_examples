@@ -80,22 +80,15 @@ vector[5] lam;
 vector[6] alpha;
 vector[npen] beta;
 real<lower=0> psi;
-vector[npen] pinvpsi;
-vector[npen] gammaPar;
-vector[npen] ptau;
+vector<lower=0>[npen] lambda;
+real<lower=0> tau;
 }
 
 transformed parameters{
 
 vector[6] mu[N];
 vector[N] mu2;
-vector[npen] ppsi;
-vector[npen] pen;
 
-for(j in 1:npen){
-pen[j] =  pow(ppsi[j],-1);
-ppsi[j] = pow(pinvpsi[j],-1);
-}
 
 
 
@@ -119,12 +112,11 @@ sigma ~ gamma(2,2);
 alpha ~ normal(0,1);
 psi ~ gamma(2,2);
 
-pinvpsi ~ gamma(1,.05);
-ptau ~ gamma(1,gammaPar/2);
-gammaPar ~ gamma(1,.05);
+lambda ~ cauchy(0, 1);
+  tau ~ cauchy(0, 1);
 
 for(j in 1:npen){
-beta[j] ~ normal(0,pow(pen[j],-.5));
+beta[j] ~ normal(0,lambda[j] * tau);
 }
 
 
@@ -148,7 +140,7 @@ init.list <- function(){
   alpha = rep(0,6))
 }
 
-
+# https://www.ariddell.org/horseshoe-prior-with-stan.html
 
 fa.model=stan(model_code=mod.stan,
               data = dat,chains=1,init=init.list,
