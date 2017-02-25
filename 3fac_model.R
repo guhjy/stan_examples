@@ -1,4 +1,4 @@
-library(rstan);library(lavaan)
+library(rstan);library(lavaan);library(loo)
 
 #install_github('nathanvan/rstanmulticore')
 library(rstanmulticore)
@@ -81,9 +81,19 @@ model{
   }
   
 }
+generated quantities {
+  vector[N] log_lik;
+  for (n in 1:N){
+    log_lik[n] = normal_lpdf(X[n,]| mu[n], var_p); 
+  }
+}
+
 "
 
-fa.model=pstan(model_code=mod.stan,
-                data = fa.data,chains=3,
-              pars=c("lam","b","var_p"))
+fa.model=stan(model_code=mod.stan,
+                data = fa.data,chains=1,
+              pars=c("lam","b","var_p","log_lik"))
 print(fa.model)
+
+lik <- extract_log_lik(fa.model)
+loo(lik)#;waic(lik)

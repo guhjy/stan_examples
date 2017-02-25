@@ -120,9 +120,18 @@ model{
   }
   
 }
+generated quantities {
+  vector[Nrow] log_lik;
+for (n in 1:Nrow){
+log_lik[n] = normal_lpdf(X[n,]| mu[n], var_p); 
+}
+}
 "
 
 fa.model=stan(model_code=mod.stan,iter=5000,warmup=2000,
                 data = mod.data,chains=1,
               pars=c("lam","b","var_p","Sd_d","M"))
 print(fa.model)
+
+lik <- extract_log_lik(fa.model)
+loo(lik)#;waic(lik)
