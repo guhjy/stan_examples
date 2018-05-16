@@ -5,12 +5,19 @@ library(rstan)
 wisc <- read.table("C:/Users/RJacobucci/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
 wisc <- read.table("C:/Users/jacobucc/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
 wisc <- read.table("C:/Users/Ross/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
+wisc <- read.table("/Users/rjacobuc/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
 names(wisc)<- c("V1","V2","V4","V6","P1","P2","P4", "P6", "Moeducat")
 
 
 
+change1 = wisc[,2] - wisc[,1]
+ind1 = change1 > 8.67
 
+change2 = wisc[,3] - wisc[,2]
 
+ind2 = change2>10.2
+
+table(ind1,ind2)
 
 
 library(lavaan)

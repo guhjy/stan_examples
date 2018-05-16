@@ -1,5 +1,6 @@
 wisc <- read.table("C:/Users/RJacobucci/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
 wisc <- read.table("C:/Users/jacobucc/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
+wisc <- read.table("/Users/rjacobuc/Documents/GitHub/EDM_Labs/2015/wisc4vpe.dat")
 names(wisc)<- c("V1","V2","V4","V6","P1","P2","P4", "P6", "Moeducat")
 
 
@@ -90,4 +91,39 @@ print(mixed.model)
  
 
 
+# greta
 
+
+
+subj = as.integer(factor(wisc.long$id))
+
+# create variables with prior distributions
+
+sd = uniform(0, 20)
+intercept_mean = normal(0, 20)
+slope_mean = normal(0,10)
+
+#create variables for random intercepts
+intercept_sd = uniform(0, 50)
+slope_sd = uniform(0, 20)
+N <- 204
+random_intercept =  normal(intercept_mean, intercept_sd, dim = N) 
+random_slope =  normal(slope_mean, slope_sd, dim = N)
+
+# equation for mean sepal length
+mean <- random_intercept[subj] + random_slope[subj] * wisc.long$grade 
+
+#likelihood of the observed data
+distribution(wisc.long$verbal) = normal( mean , sd)
+
+#model creation
+m <- model(intercept_mean,intercept_sd, slope_mean,slope_sd, sd,
+           random_intercept,random_slope)
+
+#sample from model
+draws <- mcmc(m, n_samples = 2000, warmup = 100, thin = 4)
+
+#plot fit and trace
+MCMCvis::MCMCtrace(draws)
+
+summary(draws)
