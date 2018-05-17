@@ -270,7 +270,80 @@ lik.prop <- extract_log_lik(prop.out)
 loo.prop = loo(lik.prop)
 loo.prop
 
+# proportional with vector of pi
 
+
+stan.prop2 <-"
+data{
+int N; // sample size
+int t; 
+vector[t] alpha;
+vector[t] X[N]; // data matrix of order [N,P]
+}
+
+parameters{
+
+real sigma; // variance for each variable
+vector[t-1] pi;
+vector[N] intt;
+
+real intt_mean;
+real intt_var;
+}
+
+transformed parameters{
+matrix[N,t] mu;
+matrix[N,t-1] d;
+
+
+mu[,1] = intt;
+
+for (tt in 2:t){
+d[,tt-1] = pi[tt-1]*mu[,tt-1];
+mu[,tt] = d[,tt-1]+mu[,tt-1];
+}
+
+
+}
+
+model{
+
+pi ~ normal(0.4,.01);
+sigma ~ gamma(2,2);
+intt_var ~ gamma(2,2);
+intt_mean ~ normal(20,5);
+
+
+
+for (i in 1:N){
+intt[i] ~ normal(intt_mean,intt_var);
+
+for (tt in 1:t){
+X[i,tt] ~ normal(mu[i,tt], pow(sigma,0.5));
+}
+}
+}
+generated quantities {
+vector[N] log_lik;
+for (n in 1:N)
+log_lik[n] = normal_lpdf(X[n,]| mu[n,], sigma);
+}"
+
+
+
+system.time(prop.out2 <- stan(model_code=stan.prop2,iter=200,
+                             #init=init.function,
+                             #control = list(max_treedepth=20,adapt_delta=0.99),
+                             data = dat2,chains=3,cores=3,
+                             pars=c("sigma","intt_mean","intt_var","pi","log_lik")))
+
+pairs(prop.out2,pars = c("pi","intt_mean","intt_var","sigma"))
+prop.out2
+
+
+lik.prop2 <- extract_log_lik(prop.out2)
+loo.prop = loo(lik.prop2)
+loo.prop2
 
 # linear change
 
@@ -434,6 +507,269 @@ lik.dual <- extract_log_lik(dual.out)
 loo.dual = loo(lik.dual)
 loo.dual
 
+
+# dual with vector of pi
+
+
+stan.dual2 <-"
+data{
+int N; // sample size
+int t; 
+vector[t] alpha;
+vector[t] X[N]; // data matrix of order [N,P]
+}
+
+parameters{
+//vector[2] FS[N]; // factor scores, matrix of order [N,D]
+matrix[N,2] FS;
+real sigma; // variance for each variable
+vector[2] M;
+vector[t-1] pi;
+
+cholesky_factor_corr[2] L_Omega;
+vector<lower=0>[2] L_sigma;
+}
+
+transformed parameters{
+matrix[N,t] mu;
+matrix[N,t-1] d;
+
+
+mu[,1] = FS[,1];
+
+for (tt in 2:t){
+d[,tt-1] = pi[tt-1]*mu[,tt-1] + alpha[tt]*FS[,2];
+mu[,tt] = d[,tt-1]+mu[,tt-1];
+}
+
+
+}
+
+model{
+matrix[2,2] L_Sigma;
+M[1] ~ normal(20,5);
+M[2] ~ normal(-2,5);
+
+pi ~ normal(0.4,.01);
+sigma ~ gamma(2,2);
+
+L_Sigma = diag_pre_multiply(L_sigma, L_Omega);
+L_Omega ~ lkj_corr_cholesky(2);
+L_sigma ~ cauchy(0, 2.5);
+
+
+for (i in 1:N){
+FS[i,] ~ multi_normal_cholesky(M, L_Sigma);
+
+for (tt in 1:t){
+X[i,tt] ~ normal(mu[i,tt], pow(sigma,0.5));
+}
+}
+}
+generated quantities {
+cov_matrix[2] phi;
+vector[N] log_lik;
+phi = diag_pre_multiply(L_sigma, L_Omega) * diag_pre_multiply(L_sigma, L_Omega)';
+for (n in 1:N)
+log_lik[n] = normal_lpdf(X[n,]| mu[n,], sigma);
+}"
+
+init.function <- function(){
+  list(pi = rnorm(1,0.4,.1))
+}
+
+system.time(dual.out2 <- stan(model_code=stan.dual2,iter=200,
+                             #init=init.function,
+                             #control = list(max_treedepth=20,adapt_delta=0.99),
+                             data = dat2,chains=3,cores=3,
+                             pars=c("sigma","M","phi","pi","log_lik")))
+
+pairs(dual.out2,pars = c("M","pi","phi","sigma"))
+dual.out2
+traceplot(dual.out2,"pi")
+
+
+lik.dual2 <- extract_log_lik(dual.out2)
+loo.dual2 = loo(lik.dual2)
+loo.dual2
+
+
+# estimate mean of pi
+
+
+stan.dual3 <-"
+data{
+int N; // sample size
+int t; 
+vector[t] alpha;
+vector[t] X[N]; // data matrix of order [N,P]
+}
+
+parameters{
+//vector[2] FS[N]; // factor scores, matrix of order [N,D]
+matrix[N,2] FS;
+real sigma; // variance for each variable
+vector[2] M;
+vector[t-1] pi;
+real pi_mean;
+
+cholesky_factor_corr[2] L_Omega;
+vector<lower=0>[2] L_sigma;
+}
+
+transformed parameters{
+matrix[N,t] mu;
+matrix[N,t-1] d;
+
+
+mu[,1] = FS[,1];
+
+for (tt in 2:t){
+d[,tt-1] = pi[tt-1]*mu[,tt-1] + alpha[tt]*FS[,2];
+mu[,tt] = d[,tt-1]+mu[,tt-1];
+}
+
+
+}
+
+model{
+matrix[2,2] L_Sigma;
+M[1] ~ normal(20,5);
+M[2] ~ normal(-2,5);
+
+pi ~ normal(pi_mean,.01);
+pi_mean ~ normal(0.3,.1);
+sigma ~ gamma(2,2);
+
+L_Sigma = diag_pre_multiply(L_sigma, L_Omega);
+L_Omega ~ lkj_corr_cholesky(2);
+L_sigma ~ cauchy(0, 2.5);
+
+
+for (i in 1:N){
+FS[i,] ~ multi_normal_cholesky(M, L_Sigma);
+
+for (tt in 1:t){
+X[i,tt] ~ normal(mu[i,tt], pow(sigma,0.5));
+}
+}
+}
+generated quantities {
+cov_matrix[2] phi;
+vector[N] log_lik;
+phi = diag_pre_multiply(L_sigma, L_Omega) * diag_pre_multiply(L_sigma, L_Omega)';
+for (n in 1:N)
+log_lik[n] = normal_lpdf(X[n,]| mu[n,], sigma);
+}"
+
+init.function <- function(){
+  list(pi = rnorm(1,0.4,.1))
+}
+
+system.time(dual.out3 <- stan(model_code=stan.dual3,iter=200,
+                              #init=init.function,
+                              #control = list(max_treedepth=20,adapt_delta=0.99),
+                              data = dat2,chains=3,cores=3,
+                              pars=c("sigma","M","phi","pi","log_lik")))
+
+pairs(dual.out3,pars = c("M","pi","phi","sigma"))
+dual.out3
+traceplot(dual.out3,"pi")
+
+
+lik.dual3 <- extract_log_lik(dual.out3)
+loo.dual3 = loo(lik.dual3)
+loo.dual3
+
+
+# estimate variance
+
+
+stan.dual4 <-"
+data{
+int N; // sample size
+int t; 
+vector[t] alpha;
+vector[t] X[N]; // data matrix of order [N,P]
+}
+
+parameters{
+//vector[2] FS[N]; // factor scores, matrix of order [N,D]
+matrix[N,2] FS;
+real sigma; // variance for each variable
+vector[2] M;
+vector[t-1] pi;
+real pi_mean;
+real pi_var;
+
+cholesky_factor_corr[2] L_Omega;
+vector<lower=0>[2] L_sigma;
+}
+
+transformed parameters{
+matrix[N,t] mu;
+matrix[N,t-1] d;
+
+
+mu[,1] = FS[,1];
+
+for (tt in 2:t){
+d[,tt-1] = pi[tt-1]*mu[,tt-1] + alpha[tt]*FS[,2];
+mu[,tt] = d[,tt-1]+mu[,tt-1];
+}
+
+
+}
+
+model{
+matrix[2,2] L_Sigma;
+M[1] ~ normal(20,5);
+M[2] ~ normal(-2,5);
+
+pi ~ normal(pi_mean,pi_var);
+pi_mean ~ normal(0,1);
+sigma ~ gamma(2,2);
+pi_var ~ gamma(.1,10);
+
+L_Sigma = diag_pre_multiply(L_sigma, L_Omega);
+L_Omega ~ lkj_corr_cholesky(2);
+L_sigma ~ cauchy(0, 2.5);
+
+
+for (i in 1:N){
+FS[i,] ~ multi_normal_cholesky(M, L_Sigma);
+
+for (tt in 1:t){
+X[i,tt] ~ normal(mu[i,tt], pow(sigma,0.5));
+}
+}
+}
+generated quantities {
+cov_matrix[2] phi;
+vector[N] log_lik;
+phi = diag_pre_multiply(L_sigma, L_Omega) * diag_pre_multiply(L_sigma, L_Omega)';
+for (n in 1:N)
+log_lik[n] = normal_lpdf(X[n,]| mu[n,], sigma);
+}"
+
+init.function <- function(){
+  list(pi = rnorm(3,0.4,.1))
+}
+
+system.time(dual.out4 <- stan(model_code=stan.dual4,iter=200,
+                              init=init.function,
+                              control = list(max_treedepth=20,adapt_delta=0.99),
+                              data = dat2,chains=3,cores=3,
+                              pars=c("sigma","M","phi","pi","pi_mean","pi_var","log_lik")))
+
+pairs(dual.out4,pars = c("M","pi","phi","sigma"))
+dual.out4
+
+traceplot(dual.out4,"pi_var")
+
+lik.dual4 <- extract_log_lik(dual.out4)
+loo.dual4 = loo(lik.dual4)
+loo.dual4
 
 # try changes to changes
 
