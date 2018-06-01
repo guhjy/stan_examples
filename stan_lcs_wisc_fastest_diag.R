@@ -860,3 +860,78 @@ traceplot(changes.out,"M")
 lik.changes <- extract_log_lik(changes.out)
 loo.changes = loo(lik.changes)
 loo.changes
+
+
+# exponential
+
+stan.exponential <-"
+data{
+int N; // sample size
+int t; 
+vector[t] X[N]; // data matrix of order [N,P]
+}
+
+parameters{
+matrix[N,2] FS;
+real sigma; // variance for each variable
+vector[2] M;
+real alpha;
+
+cholesky_factor_corr[2] L_Omega;
+vector<lower=0>[2] L_sigma;
+}
+
+transformed parameters{
+matrix[N,t] mu;
+
+for(i in 1:N){
+for (tt in 1:t){
+mu[i,tt] = FS[i,1] + FS[i,2]*(exp(alpha*(tt-1)));
+}
+}
+
+}
+
+model{
+matrix[2,2] L_Sigma;
+M[1] ~ normal(20,100);
+M[2] ~ normal(0,100);
+
+alpha ~ normal(0,2);
+sigma ~ gamma(2,2);
+
+L_Sigma = diag_pre_multiply(L_sigma, L_Omega);
+L_Omega ~ lkj_corr_cholesky(2);
+L_sigma ~ cauchy(0, 2.5);
+
+
+for (i in 1:N){
+FS[i,] ~ multi_normal_cholesky(M, L_Sigma);
+
+for (tt in 1:t){
+X[i,tt] ~ normal(mu[i,tt], pow(sigma,0.5));
+}
+}
+}
+generated quantities {
+cov_matrix[2] phi;
+vector[N] log_lik;
+phi = diag_pre_multiply(L_sigma, L_Omega) * diag_pre_multiply(L_sigma, L_Omega)';
+for (n in 1:N)
+log_lik[n] = normal_lpdf(X[n,]| mu[n,], sigma);
+}"
+
+init.function <- function(){
+  list(M = rnorm(2,c(15,-2),1))
+}
+
+exponential.out <- stan(model_code=stan.exponential,iter=200,
+                        #init=init.function,
+                        control = list(max_treedepth=20,adapt_delta=0.8),
+                        data = dat2,chains=1,cores=1,
+                        pars=c("sigma","M","phi","alpha","log_lik"))
+exponential.out
+pairs(exponential.out,pars=c("sigma","M","phi","alpha"))
+traceplot(exponential.out,"alpha")
+traceplot(exponential.out,"M")
+
